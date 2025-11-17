@@ -1,0 +1,711 @@
+// MediCare SaaS - Database Schema
+// PostgreSQL + Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN_CABINET
+  PRACTITIONER
+  SECRETARY
+  PARAMEDICAL
+  RADIOLOGIST
+  LABORATORY
+  PATIENT
+}
+
+enum PractitionerType {
+  GENERAL_PRACTITIONER
+  SPECIALIST
+  DENTIST
+  OPHTHALMOLOGIST
+  DERMATOLOGIST
+  CARDIOLOGIST
+  PEDIATRICIAN
+  GYNECOLOGIST
+  PSYCHIATRIST
+  PHYSIOTHERAPIST
+  NUTRITIONIST
+  PSYCHOLOGIST
+  NURSE
+  RADIOLOGIST
+  LABORATORY_TECH
+  OTHER
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  ARRIVED
+  IN_CONSULTATION
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum AppointmentType {
+  CONSULTATION
+  TELECONSULTATION
+  FIRST_VISIT
+  FOLLOW_UP
+  EMERGENCY
+  CHECK_UP
+  VACCINATION
+  IMAGING
+  LABORATORY
+  OTHER
+}
+
+enum NotificationType {
+  SMS
+  EMAIL
+  WHATSAPP
+  PUSH
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  READ
+}
+
+enum DocumentType {
+  PRESCRIPTION
+  LAB_RESULT
+  IMAGING
+  REPORT
+  INVOICE
+  CONSENT_FORM
+  VACCINATION_CARD
+  SICK_LEAVE
+  OTHER
+}
+
+enum SubscriptionPlan {
+  FREE
+  STARTER
+  STANDARD
+  PREMIUM
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIAL
+  SUSPENDED
+  CANCELLED
+  EXPIRED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum BloodGroup {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  PARTIALLY_PAID
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  CHECK
+  INSURANCE
+  OTHER
+}
+
+// ============================================
+// MODELS
+// ============================================
+
+// User Model - Central authentication table
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  phone             String?   @unique
+  password          String
+  role              UserRole
+  isActive          Boolean   @default(true)
+  isEmailVerified   Boolean   @default(false)
+  isPhoneVerified   Boolean   @default(false)
+  lastLogin         DateTime?
+  passwordChangedAt DateTime?
+  passwordResetToken String?
+  passwordResetExpires DateTime?
+  twoFactorEnabled  Boolean   @default(false)
+  twoFactorSecret   String?
+  refreshToken      String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  cabinet           Cabinet?  @relation("CabinetAdmin")
+  practitioner      Practitioner?
+  patient           Patient?
+  secretary         Secretary?
+  createdCabinets   Cabinet[] @relation("CreatedBy")
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+
+  @@index([email])
+  @@index([phone])
+  @@map("users")
+}
+
+// Cabinet Model - Multi-tenant structure
+model Cabinet {
+  id                String    @id @default(uuid())
+  name              String
+  slug              String    @unique
+  description       String?
+  logo              String?
+
+  // Contact
+  email             String
+  phone             String
+  address           String?
+  city              String?
+  postalCode        String?
+  country           String    @default("TN")
+
+  // Settings
+  timezone          String    @default("Africa/Tunis")
+  locale            String    @default("fr")
+  currency          String    @default("TND")
+
+  // Booking settings
+  allowOnlineBooking Boolean  @default(true)
+  minBookingDelay   Int       @default(120) // minutes
+  maxBookingDelay   Int       @default(90) // days
+  defaultAppointmentDuration Int @default(30) // minutes
+
+  // Notifications
+  smsEnabled        Boolean   @default(true)
+  emailEnabled      Boolean   @default(true)
+  whatsappEnabled   Boolean   @default(false)
+
+  // Subscription
+  subscriptionId    String?
+  subscriptionPlan  SubscriptionPlan @default(FREE)
+  subscriptionStatus SubscriptionStatus @default(TRIAL)
+  subscriptionEndsAt DateTime?
+  trialEndsAt       DateTime?
+
+  // Quotas
+  smsQuota          Int       @default(100)
+  smsUsed           Int       @default(0)
+  emailQuota        Int       @default(1000)
+  emailUsed         Int       @default(0)
+  storageQuota      BigInt    @default(1073741824) // 1GB in bytes
+  storageUsed       BigInt    @default(0)
+
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  adminId           String    @unique
+  admin             User      @relation("CabinetAdmin", fields: [adminId], references: [id])
+  createdById       String?
+  createdBy         User?     @relation("CreatedBy", fields: [createdById], references: [id])
+
+  practitioners     Practitioner[]
+  secretaries       Secretary[]
+  patients          Patient[]
+  appointments      Appointment[]
+  rooms             Room[]
+  schedules         Schedule[]
+  absences          Absence[]
+  consultations     Consultation[]
+  documents         Document[]
+  invoices          Invoice[]
+  settings          CabinetSetting[]
+
+  @@index([slug])
+  @@index([subscriptionStatus])
+  @@map("cabinets")
+}
+
+// Practitioner Model
+model Practitioner {
+  id                String    @id @default(uuid())
+  userId            String    @unique
+  cabinetId         String
+
+  // Personal info
+  firstName         String
+  lastName          String
+  title             String?   // Dr., Prof., etc.
+  speciality        PractitionerType
+  specialityDetails String?
+
+  // Professional info
+  licenseNumber     String?
+  orderNumber       String?   // Numéro d'inscription à l'ordre
+  bio               String?
+  photo             String?
+
+  // Settings
+  consultationFee   Decimal?  @db.Decimal(10, 3)
+  teleconsultationFee Decimal? @db.Decimal(10, 3)
+  allowTeleconsultation Boolean @default(false)
+  color             String?   // For calendar display
+
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cabinet           Cabinet   @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  appointments      Appointment[]
+  schedules         Schedule[]
+  absences          Absence[]
+  consultations     Consultation[]
+
+  @@index([cabinetId])
+  @@index([speciality])
+  @@map("practitioners")
+}
+
+// Secretary Model
+model Secretary {
+  id                String    @id @default(uuid())
+  userId            String    @unique
+  cabinetId         String
+
+  firstName         String
+  lastName          String
+  phone             String?
+
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cabinet           Cabinet   @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+
+  @@index([cabinetId])
+  @@map("secretaries")
+}
+
+// Patient Model
+model Patient {
+  id                String    @id @default(uuid())
+  userId            String?   @unique
+  cabinetId         String
+
+  // Personal info
+  firstName         String
+  lastName          String
+  dateOfBirth       DateTime
+  gender            Gender
+  photo             String?
+
+  // Contact
+  email             String?
+  phone             String
+  address           String?
+  city              String?
+  postalCode        String?
+
+  // Medical info
+  bloodGroup        BloodGroup?
+  allergies         String?
+  chronicDiseases   String?
+  currentMedications String?
+  emergencyContact  String?
+  emergencyPhone    String?
+
+  // Insurance
+  insuranceCompany  String?
+  insuranceNumber   String?
+
+  // Stats
+  noShowCount       Int       @default(0)
+  lastNoShowAt      DateTime?
+  totalVisits       Int       @default(0)
+
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  user              User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  cabinet           Cabinet   @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  appointments      Appointment[]
+  consultations     Consultation[]
+  documents         Document[]
+  invoices          Invoice[]
+
+  @@index([cabinetId])
+  @@index([phone])
+  @@index([email])
+  @@map("patients")
+}
+
+// Appointment Model
+model Appointment {
+  id                String    @id @default(uuid())
+  cabinetId         String
+  practitionerId    String
+  patientId         String
+  roomId            String?
+
+  // Appointment details
+  type              AppointmentType
+  status            AppointmentStatus @default(SCHEDULED)
+  startTime         DateTime
+  endTime           DateTime
+  duration          Int       // minutes
+
+  // Booking info
+  isOnlineBooking   Boolean   @default(false)
+  confirmationSentAt DateTime?
+  reminderSentAt    DateTime?
+
+  // Patient info
+  reason            String?
+  notes             String?
+
+  // Status tracking
+  arrivedAt         DateTime?
+  consultationStartedAt DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  cancelReason      String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  cabinet           Cabinet   @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  practitioner      Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+  patient           Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  room              Room?     @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  consultation      Consultation?
+  invoice           Invoice?
+
+  @@index([cabinetId])
+  @@index([practitionerId])
+  @@index([patientId])
+  @@index([startTime])
+  @@index([status])
+  @@map("appointments")
+}
+
+// Consultation Model - Medical record of visit
+model Consultation {
+  id                String    @id @default(uuid())
+  cabinetId         String
+  appointmentId     String    @unique
+  practitionerId    String
+  patientId         String
+
+  // Consultation data
+  chiefComplaint    String?   // Motif de consultation
+  presentIllness    String?   // Histoire de la maladie
+
+  // Physical examination
+  height            Decimal?  @db.Decimal(5, 2) // cm
+  weight            Decimal?  @db.Decimal(5, 2) // kg
+  bloodPressureSystolic Int?
+  bloodPressureDiastolic Int?
+  heartRate         Int?
+  temperature       Decimal?  @db.Decimal(4, 2)
+  oxygenSaturation  Int?
+
+  // Clinical findings
+  clinicalFindings  String?
+
+  // Diagnosis
+  diagnosisPrimary  String?
+  diagnosisSecondary String?
+  icdCodes          String?   // ICD-10 codes
+
+  // Treatment
+  prescription      String?   // JSON or text
+  recommendations   String?
+
+  // Follow-up
+  followUpDate      DateTime?
+  followUpNotes     String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  cabinet           Cabinet   @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  appointment       Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  practitioner      Practitioner @relation(fields: [practitionerId], references: [id])
+  patient           Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  documents         Document[]
+
+  @@index([cabinetId])
+  @@index([patientId])
+  @@index([practitionerId])
+  @@map("consultations")
+}
+
+// Document Model - Medical documents
+model Document {
+  id                String    @id @default(uuid())
+  cabinetId         String
+  patientId         String
+  consultationId    String?
+
+  type              DocumentType
+  title             String
+  description       String?
+
+  // File info
+  fileName          String
+  filePath          String
+  fileSize          BigInt
+  mimeType          String
+
+  // Encryption
+  isEncrypted       Boolean   @default(true)
+  encryptionKey     String?
+
+  // Metadata
+  uploadedBy        String?   // User ID
+  tags              String?   // JSON array
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  cabinet           Cabinet   @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  patient           Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  consultation      Consultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+
+  @@index([cabinetId])
+  @@index([patientId])
+  @@index([type])
+  @@map("documents")
+}
+
+// Schedule Model - Practitioner working hours
+model Schedule {
+  id                String    @id @default(uuid())
+  cabinetId         String
+  practitionerId    String
+
+  dayOfWeek         Int       // 0=Sunday, 1=Monday, ..., 6=Saturday
+  startTime         String    // Format: "HH:MM"
+  endTime           String    // Format: "HH:MM"
+
+  isActive          Boolean   @default(true)
+
+  // Relations
+  cabinet           Cabinet   @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  practitioner      Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+
+  @@unique([practitionerId, dayOfWeek])
+  @@index([cabinetId])
+  @@map("schedules")
+}
+
+// Absence Model - Practitioner absences
+model Absence {
+  id                String    @id @default(uuid())
+  cabinetId         String
+  practitionerId    String
+
+  startDate         DateTime
+  endDate           DateTime
+  reason            String?
+  isAllDay          Boolean   @default(true)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  cabinet           Cabinet   @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  practitioner      Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+
+  @@index([cabinetId])
+  @@index([practitionerId])
+  @@map("absences")
+}
+
+// Room Model - Consultation rooms
+model Room {
+  id                String    @id @default(uuid())
+  cabinetId         String
+
+  name              String
+  description       String?
+  floor             String?
+  capacity          Int       @default(1)
+
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  cabinet           Cabinet   @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  appointments      Appointment[]
+
+  @@index([cabinetId])
+  @@map("rooms")
+}
+
+// Notification Model
+model Notification {
+  id                String    @id @default(uuid())
+  userId            String?
+
+  type              NotificationType
+  status            NotificationStatus @default(PENDING)
+
+  // Recipient
+  recipientEmail    String?
+  recipientPhone    String?
+
+  // Content
+  subject           String?
+  message           String
+
+  // Metadata
+  metadata          String?   // JSON data
+
+  // Tracking
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  failedAt          DateTime?
+  errorMessage      String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  user              User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([type])
+  @@map("notifications")
+}
+
+// Invoice Model - Billing
+model Invoice {
+  id                String    @id @default(uuid())
+  cabinetId         String
+  patientId         String
+  appointmentId     String?   @unique
+
+  invoiceNumber     String    @unique
+
+  // Amounts
+  subtotal          Decimal   @db.Decimal(10, 3)
+  tax               Decimal   @default(0) @db.Decimal(10, 3)
+  discount          Decimal   @default(0) @db.Decimal(10, 3)
+  total             Decimal   @db.Decimal(10, 3)
+
+  // Payment
+  paymentStatus     PaymentStatus @default(PENDING)
+  paymentMethod     PaymentMethod?
+  paidAmount        Decimal   @default(0) @db.Decimal(10, 3)
+  paidAt            DateTime?
+
+  // Dates
+  issueDate         DateTime  @default(now())
+  dueDate           DateTime?
+
+  notes             String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  cabinet           Cabinet   @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  patient           Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment       Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([cabinetId])
+  @@index([patientId])
+  @@index([paymentStatus])
+  @@map("invoices")
+}
+
+// Cabinet Settings Model - Flexible key-value settings
+model CabinetSetting {
+  id                String    @id @default(uuid())
+  cabinetId         String
+
+  key               String
+  value             String
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  cabinet           Cabinet   @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+
+  @@unique([cabinetId, key])
+  @@index([cabinetId])
+  @@map("cabinet_settings")
+}
+
+// Audit Log Model - Track all important actions
+model AuditLog {
+  id                String    @id @default(uuid())
+  userId            String?
+
+  action            String    // CREATE, UPDATE, DELETE, LOGIN, etc.
+  entity            String    // User, Patient, Appointment, etc.
+  entityId          String?
+
+  oldValues         String?   // JSON
+  newValues         String?   // JSON
+
+  ipAddress         String?
+  userAgent         String?
+
+  createdAt         DateTime  @default(now())
+
+  // Relations
+  user              User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
