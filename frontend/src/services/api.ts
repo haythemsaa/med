@@ -66,4 +66,72 @@ export const authAPI = {
   register: (data: any) => api.post('/auth/register', data),
   logout: () => api.post('/auth/logout'),
   getMe: () => api.get('/auth/me'),
+  forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token: string, password: string) =>
+    api.post('/auth/reset-password', { token, password }),
+};
+
+export const cabinetAPI = {
+  getAll: (params?: any) => api.get('/cabinets', { params }),
+  getById: (id: string) => api.get(`/cabinets/${id}`),
+  create: (data: any) => api.post('/cabinets', data),
+  update: (id: string, data: any) => api.put(`/cabinets/${id}`, data),
+  delete: (id: string) => api.delete(`/cabinets/${id}`),
+  getStats: (id: string) => api.get(`/cabinets/${id}/stats`),
+};
+
+export const patientAPI = {
+  getAll: (params?: any) => api.get('/patients', { params }),
+  getById: (id: string) => api.get(`/patients/${id}`),
+  create: (data: any) => api.post('/patients', data),
+  update: (id: string, data: any) => api.put(`/patients/${id}`, data),
+  delete: (id: string) => api.delete(`/patients/${id}`),
+  getHistory: (id: string) => api.get(`/patients/${id}/history`),
+  getStats: (id: string) => api.get(`/patients/${id}/stats`),
+};
+
+export const practitionerAPI = {
+  getAll: (params?: any) => api.get('/practitioners', { params }),
+  getById: (id: string) => api.get(`/practitioners/${id}`),
+  create: (data: any) => api.post('/practitioners', data),
+  update: (id: string, data: any) => api.put(`/practitioners/${id}`, data),
+  delete: (id: string) => api.delete(`/practitioners/${id}`),
+  getSchedule: (id: string) => api.get(`/practitioners/${id}/schedule`),
+  setSchedule: (id: string, data: any) => api.put(`/practitioners/${id}/schedule`, data),
+  addAbsence: (id: string, data: any) => api.post(`/practitioners/${id}/absences`, data),
+  getStats: (id: string) => api.get(`/practitioners/${id}/stats`),
+};
+
+export const appointmentAPI = {
+  getAll: (params?: any) => api.get('/appointments', { params }),
+  getById: (id: string) => api.get(`/appointments/${id}`),
+  create: (data: any) => api.post('/appointments', data),
+  update: (id: string, data: any) => api.put(`/appointments/${id}`, data),
+  delete: (id: string) => api.delete(`/appointments/${id}`),
+  cancel: (id: string, reason?: string) => api.put(`/appointments/${id}/cancel`, { reason }),
+  markAsNoShow: (id: string) => api.put(`/appointments/${id}/no-show`),
+  getAvailableSlots: (practitionerId: string, date: string, duration?: number) =>
+    api.get('/appointments/available-slots', { params: { practitionerId, date, duration } }),
+};
+
+export const consultationAPI = {
+  getAll: (params?: any) => api.get('/consultations', { params }),
+  getById: (id: string) => api.get(`/consultations/${id}`),
+  create: (data: any) => api.post('/consultations', data),
+  update: (id: string, data: any) => api.put(`/consultations/${id}`, data),
+  delete: (id: string) => api.delete(`/consultations/${id}`),
+  getByAppointment: (appointmentId: string) =>
+    api.get(`/consultations/appointment/${appointmentId}`),
+  getPatientHistory: (patientId: string) =>
+    api.get(`/consultations/patient/${patientId}/history`),
+};
+
+export const documentAPI = {
+  getAll: (params?: any) => api.get('/documents', { params }),
+  getById: (id: string) => api.get(`/documents/${id}`),
+  upload: (data: FormData) => api.post('/documents/upload', data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  download: (id: string) => api.get(`/documents/${id}/download`, { responseType: 'blob' }),
+  delete: (id: string) => api.delete(`/documents/${id}`),
 };
