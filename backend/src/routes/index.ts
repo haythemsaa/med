@@ -6,6 +6,10 @@ import practitionerRoutes from './practitioner.routes';
 import appointmentRoutes from './appointment.routes';
 import consultationRoutes from './consultation.routes';
 import documentRoutes from './document.routes';
+import teleconsultationRoutes from './teleconsultation.routes';
+import questionnaireRoutes from './questionnaire.routes';
+import analyticsRoutes from './analytics.routes';
+import publicBookingRoutes from './publicBooking.routes';
 
 const router = Router();
 
@@ -15,11 +19,19 @@ router.get('/health', (req, res) => {
     success: true,
     message: 'MediCare API is running',
     timestamp: new Date().toISOString(),
-    version: '1.0.0',
+    version: '2.0.0',
+    features: [
+      'Core Management',
+      'Teleconsultation',
+      'AI Analytics',
+      'Public Booking',
+      'Questionnaires',
+      'GDPR Compliance'
+    ]
   });
 });
 
-// API Routes
+// Core API Routes
 router.use('/auth', authRoutes);
 router.use('/cabinets', cabinetRoutes);
 router.use('/patients', patientRoutes);
@@ -27,5 +39,11 @@ router.use('/practitioners', practitionerRoutes);
 router.use('/appointments', appointmentRoutes);
 router.use('/consultations', consultationRoutes);
 router.use('/documents', documentRoutes);
+
+// Advanced Features Routes
+router.use('/teleconsultations', teleconsultationRoutes);
+router.use('/questionnaires', questionnaireRoutes);
+router.use('/analytics', analyticsRoutes);
+router.use('/public-booking', publicBookingRoutes);
 
 export default router;
