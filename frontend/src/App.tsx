@@ -11,6 +11,9 @@ import PractitionersPage from './pages/practitioners/PractitionersPage';
 import ConsultationsPage from './pages/consultations/ConsultationsPage';
 import DocumentsPage from './pages/documents/DocumentsPage';
 import SettingsPage from './pages/settings/SettingsPage';
+import PatientPortalPage from './pages/patient-portal/PatientPortalPage';
+import TeleconsultationRoomPage from './pages/teleconsultation/TeleconsultationRoomPage';
+import PublicBookingPage from './pages/public/PublicBookingPage';
 
 const theme = createTheme({
   palette: {
@@ -86,6 +89,23 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/patient-portal"
+            element={
+              <ProtectedRoute allowedRoles={['PATIENT']}>
+                <PatientPortalPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teleconsultation/room/:sessionId"
+            element={
+              <ProtectedRoute>
+                <TeleconsultationRoomPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/book/:slug" element={<PublicBookingPage />} />
           <Route path="/" element={<Navigate to="/login" replace />} />
         </Routes>
       </AuthProvider>

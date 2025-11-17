@@ -418,6 +418,8 @@ model Appointment {
   room              Room?     @relation(fields: [roomId], references: [id], onDelete: SetNull)
   consultation      Consultation?
   invoice           Invoice?
+  teleconsultation  Teleconsultation?
+  waitingRoom       WaitingRoom?
 
   @@index([cabinetId])
   @@index([practitionerId])
@@ -681,6 +683,199 @@ model CabinetSetting {
   @@unique([cabinetId, key])
   @@index([cabinetId])
   @@map("cabinet_settings")
+}
+
+// Teleconsultation Model - Video consultation sessions
+model Teleconsultation {
+  id                String    @id @default(uuid())
+  appointmentId     String    @unique
+
+  // Session details
+  sessionId         String?   @unique
+  roomUrl           String?
+  roomToken         String?
+
+  // Status
+  status            AppointmentStatus @default(SCHEDULED)
+
+  // Timing
+  scheduledAt       DateTime
+  startedAt         DateTime?
+  endedAt           DateTime?
+  duration          Int?      // minutes
+
+  // Participants
+  practitionerJoinedAt DateTime?
+  patientJoinedAt   DateTime?
+
+  // Recording
+  recordingEnabled  Boolean   @default(false)
+  recordingUrl      String?
+
+  // Technical
+  connectionQuality String?   // good, medium, poor
+  techIssues        String?   // JSON log of issues
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  appointment       Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId])
+  @@index([sessionId])
+  @@map("teleconsultations")
+}
+
+// Waiting Room Model - Virtual waiting for teleconsultations
+model WaitingRoom {
+  id                String    @id @default(uuid())
+  appointmentId     String    @unique
+
+  // Patient status
+  patientJoinedAt   DateTime?
+  patientReadyAt    DateTime?
+  estimatedWaitTime Int?      // minutes
+
+  // Practitioner notification
+  practitionerNotifiedAt DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  appointment       Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId])
+  @@map("waiting_rooms")
+}
+
+// Questionnaire Model - Pre-consultation forms
+model Questionnaire {
+  id                String    @id @default(uuid())
+  cabinetId         String
+
+  title             String
+  description       String?
+
+  // Configuration
+  isActive          Boolean   @default(true)
+  isRequired        Boolean   @default(false)
+  showBeforeBooking Boolean   @default(true)
+
+  // Questions (JSON structure)
+  questions         Json      // [{id, type, text, options, required}]
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  responses         QuestionnaireResponse[]
+
+  @@index([cabinetId])
+  @@map("questionnaires")
+}
+
+// Questionnaire Response Model
+model QuestionnaireResponse {
+  id                String    @id @default(uuid())
+  questionnaireId   String
+  patientId         String
+  appointmentId     String?
+
+  // Answers (JSON structure)
+  answers           Json      // [{questionId, answer}]
+
+  completedAt       DateTime  @default(now())
+
+  // Relations
+  questionnaire     Questionnaire @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+
+  @@index([questionnaireId])
+  @@index([patientId])
+  @@map("questionnaire_responses")
+}
+
+// Consent Record Model - RGPD/GDPR compliance
+model ConsentRecord {
+  id                String    @id @default(uuid())
+  patientId         String
+
+  // Consent details
+  consentType       String    // data_processing, marketing, teleconsultation, etc.
+  consentGiven      Boolean
+  consentText       String?   // The text that was shown
+
+  // Electronic signature
+  signatureData     String?   // Base64 signature image
+  ipAddress         String?
+  userAgent         String?
+
+  // Dates
+  consentDate       DateTime  @default(now())
+  expiryDate        DateTime?
+  withdrawnAt       DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([patientId])
+  @@index([consentType])
+  @@map("consent_records")
+}
+
+// Public Booking Page Model - Custom branded booking pages
+model PublicBookingPage {
+  id                String    @id @default(uuid())
+  cabinetId         String    @unique
+
+  // URL configuration
+  slug              String    @unique
+  customDomain      String?
+
+  // Branding
+  primaryColor      String    @default("#1976d2")
+  secondaryColor    String    @default("#dc004e")
+  logo              String?
+  headerImage       String?
+
+  // Content
+  welcomeMessage    String?
+  description       String?
+  showPractitioners Boolean   @default(true)
+  showReviews       Boolean   @default(false)
+
+  // Settings
+  isActive          Boolean   @default(true)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([slug])
+  @@map("public_booking_pages")
+}
+
+// Analytics Model - Track usage and metrics
+model Analytics {
+  id                String    @id @default(uuid())
+  cabinetId         String
+
+  // Metrics
+  metric            String    // appointments_created, no_shows, revenue, etc.
+  value             Decimal   @db.Decimal(15, 2)
+  count             Int       @default(1)
+
+  // Dimensions
+  date              DateTime
+  practitionerId    String?
+  metadata          Json?     // Additional context
+
+  createdAt         DateTime  @default(now())
+
+  @@index([cabinetId])
+  @@index([metric])
+  @@index([date])
+  @@map("analytics")
 }
 
 // Audit Log Model - Track all important actions
