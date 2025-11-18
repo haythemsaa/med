@@ -205,6 +205,13 @@ model User {
   auditLogs         AuditLog[]
   notifications     Notification[]
 
+  // Advanced Features Relations
+  professionalContacts ProfessionalContact[]
+  preventionCampaigns PreventionCampaign[]
+  mspMeetings       MSPMeeting[]
+  meetingParticipants MeetingParticipant[]
+  careProtocols     CareProtocol[]
+
   @@index([email])
   @@index([phone])
   @@map("users")
@@ -279,6 +286,22 @@ model Cabinet {
   invoices          Invoice[]
   settings          CabinetSetting[]
 
+  // Advanced Features Relations
+  consultationRecordings ConsultationRecording[]
+  familyHistories   FamilyHistory[]
+  allergyDetails    AllergyDetail[]
+  professionalContacts ProfessionalContact[]
+  preventionCampaigns PreventionCampaign[]
+  mspMeetings       MSPMeeting[]
+  careProtocols     CareProtocol[]
+  advancedAgendaSettings AdvancedAgendaSettings[]
+  prescriptions     Prescription[]
+  reviews           Review[]
+  automatedReminders AutomatedReminder[]
+  payments          Payment[]
+  messages          Message[]
+  vaccinations      VaccinationRecord[]
+
   @@index([slug])
   @@index([subscriptionStatus])
   @@map("cabinets")
@@ -320,6 +343,11 @@ model Practitioner {
   schedules         Schedule[]
   absences          Absence[]
   consultations     Consultation[]
+
+  // Advanced Features Relations
+  consultationRecordings ConsultationRecording[]
+  advancedAgendaSettings AdvancedAgendaSettings?
+  prescriptions     Prescription[]
 
   @@index([cabinetId])
   @@index([speciality])
@@ -396,6 +424,20 @@ model Patient {
   consultations     Consultation[]
   documents         Document[]
   invoices          Invoice[]
+
+  // Advanced Features Relations
+  consultationRecordings ConsultationRecording[]
+  familyHistories   FamilyHistory[]
+  allergyDetails    AllergyDetail[]
+  campaignRecipients CampaignRecipient[]
+  careProtocols     CareProtocol[]
+  prescriptions     Prescription[]
+  reviews           Review[]
+  automatedReminders AutomatedReminder[]
+  payments          Payment[]
+  messagesReceived  Message[]         @relation("MessageRecipient")
+  messagesSent      Message[]         @relation("MessageSender")
+  vaccinations      VaccinationRecord[]
 
   @@index([cabinetId])
   @@index([phone])
@@ -501,6 +543,9 @@ model Consultation {
   practitioner      Practitioner @relation(fields: [practitionerId], references: [id])
   patient           Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
   documents         Document[]
+
+  // Advanced Features Relations
+  recording         ConsultationRecording?
 
   @@index([cabinetId])
   @@index([patientId])
@@ -1234,4 +1279,492 @@ model AuditLog {
   @@index([entity])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ============================================
+// DOCTOLIB-LIKE ADVANCED FEATURES
+// ============================================
+
+// Consultation Recording & AI Assistant
+model ConsultationRecording {
+  id                String          @id @default(uuid())
+  cabinetId         String
+  consultationId    String          @unique
+  practitionerId    String
+  patientId         String
+
+  // Audio Recording
+  audioUrl          String?         // S3/cloud storage URL
+  duration          Int?            // seconds
+
+  // AI Processing
+  transcription     String?         @db.Text
+  summary           String?         @db.Text
+  generatedLetter   String?         @db.Text
+  extractedData     Json?           // Antécédents, allergies, diagnostics extraits
+
+  // Status
+  status            RecordingStatus @default(PENDING)
+  processingStarted DateTime?
+  processingEnded   DateTime?
+  errorMessage      String?
+
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  // Relations
+  cabinet           Cabinet         @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  consultation      Consultation    @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  practitioner      Practitioner    @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+  patient           Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([cabinetId])
+  @@index([consultationId])
+  @@index([status])
+  @@map("consultation_recordings")
+}
+
+enum RecordingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// Family History - Antécédents Familiaux
+model FamilyHistory {
+  id                String    @id @default(uuid())
+  cabinetId         String
+  patientId         String
+
+  // Condition Details
+  conditionName     String
+  conditionCode     String?   // CIM-10 code
+
+  // Family Member
+  relationship      String    // père, mère, frère, soeur, grand-père, etc.
+  ageOfOnset        Int?      // Âge d'apparition
+  isDeceased        Boolean   @default(false)
+  ageAtDeath        Int?
+  causeOfDeath      String?
+
+  // Additional Info
+  notes             String?   @db.Text
+  severity          String?   // MILD, MODERATE, SEVERE
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  cabinet           Cabinet   @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  patient           Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([cabinetId])
+  @@index([patientId])
+  @@index([conditionName])
+  @@map("family_history")
+}
+
+// Allergy Detail - Module Allergies Détaillé
+model AllergyDetail {
+  id                String        @id @default(uuid())
+  cabinetId         String
+  patientId         String
+
+  // Allergen
+  allergenName      String
+  allergenCode      String?       // Code standard
+  allergenType      AllergenType
+
+  // Status & Severity
+  status            AllergyStatus @default(ACTIVE)
+  severity          AllergySeverity
+
+  // Reaction Details
+  reactions         String[]      // urticaire, anaphylaxie, etc.
+  firstOccurrence   DateTime?
+  lastOccurrence    DateTime?
+
+  // Testing
+  testPerformed     Boolean       @default(false)
+  testType          String?       // prick test, RAST, patch test
+  testDate          DateTime?
+  testResult        String?       @db.Text
+  testFacility      String?
+
+  // Additional Info
+  notes             String?       @db.Text
+  treatment         String?       @db.Text
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // Relations
+  cabinet           Cabinet       @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  patient           Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([cabinetId])
+  @@index([patientId])
+  @@index([status])
+  @@map("allergy_details")
+}
+
+enum AllergenType {
+  MEDICATION
+  FOOD
+  ENVIRONMENTAL
+  INSECT
+  LATEX
+  OTHER
+}
+
+enum AllergyStatus {
+  ACTIVE
+  INACTIVE
+  SUSPECTED
+  RESOLVED
+}
+
+enum AllergySeverity {
+  MILD
+  MODERATE
+  SEVERE
+  LIFE_THREATENING
+}
+
+// Professional Contact - Carnet d'Adresses Professionnel
+model ProfessionalContact {
+  id                String              @id @default(uuid())
+  cabinetId         String
+
+  // Contact Type
+  contactType       ContactType
+
+  // Personal Info
+  title             String?             // Dr., Pr., etc.
+  firstName         String
+  lastName          String
+  specialty         String?
+
+  // Professional Info
+  organization      String?
+  department        String?
+  position          String?
+
+  // Contact Details
+  email             String?
+  phone             String?
+  fax               String?
+  address           String?
+  city              String?
+  postalCode        String?
+
+  // RPPS/ADELI/FINESS
+  rppsNumber        String?
+  adeliNumber       String?
+  finessNumber      String?
+
+  // Sharing
+  isShared          Boolean             @default(false)
+  sharedWith        String[]            // User IDs who have access
+
+  // Notes
+  notes             String?             @db.Text
+  tags              String[]
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  createdBy         String
+
+  // Relations
+  cabinet           Cabinet             @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  creator           User                @relation(fields: [createdBy], references: [id])
+
+  @@index([cabinetId])
+  @@index([contactType])
+  @@index([lastName])
+  @@map("professional_contacts")
+}
+
+enum ContactType {
+  PHYSICIAN
+  SPECIALIST
+  LABORATORY
+  RADIOLOGY
+  PHARMACY
+  HOSPITAL
+  EMERGENCY_SERVICE
+  SOCIAL_SERVICE
+  OTHER
+}
+
+// Prevention Campaign - Campagnes de Prévention
+model PreventionCampaign {
+  id                String              @id @default(uuid())
+  cabinetId         String
+
+  // Campaign Info
+  name              String
+  description       String              @db.Text
+  campaignType      CampaignType
+
+  // Targeting
+  targetCondition   String?             // diabetes, hypertension, etc.
+  targetAgeMin      Int?
+  targetAgeMax      Int?
+  targetGender      String?             // M, F, ALL
+
+  // Message
+  messageSubject    String
+  messageBody       String              @db.Text
+
+  // Scheduling
+  startDate         DateTime
+  endDate           DateTime?
+
+  // Delivery
+  deliveryMethod    String[]            // SMS, EMAIL, PUSH
+
+  // Status & Stats
+  status            CampaignStatus      @default(DRAFT)
+  sentCount         Int                 @default(0)
+  deliveredCount    Int                 @default(0)
+  openedCount       Int                 @default(0)
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  createdBy         String
+
+  // Relations
+  cabinet           Cabinet             @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  creator           User                @relation(fields: [createdBy], references: [id])
+  recipients        CampaignRecipient[]
+
+  @@index([cabinetId])
+  @@index([status])
+  @@index([campaignType])
+  @@map("prevention_campaigns")
+}
+
+enum CampaignType {
+  VACCINATION_REMINDER
+  SCREENING_REMINDER
+  SEASONAL_PREVENTION
+  CHRONIC_DISEASE_FOLLOWUP
+  HEALTH_EDUCATION
+  APPOINTMENT_RECALL
+  CUSTOM
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  COMPLETED
+  CANCELLED
+}
+
+// Campaign Recipient
+model CampaignRecipient {
+  id                String              @id @default(uuid())
+  campaignId        String
+  patientId         String
+
+  // Delivery Status
+  status            DeliveryStatus      @default(PENDING)
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  openedAt          DateTime?
+  errorMessage      String?
+
+  // Relations
+  campaign          PreventionCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  patient           Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, patientId])
+  @@index([campaignId])
+  @@index([status])
+  @@map("campaign_recipients")
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  DELIVERED
+  OPENED
+  FAILED
+}
+
+// MSP Meeting - Réunions de Concertation Pluridisciplinaire (RCP)
+model MSPMeeting {
+  id                String              @id @default(uuid())
+  cabinetId         String
+
+  // Meeting Info
+  title             String
+  meetingType       MeetingType
+  description       String?             @db.Text
+
+  // Scheduling
+  scheduledDate     DateTime
+  duration          Int                 // minutes
+  location          String?
+  onlineLink        String?
+
+  // Participants
+  organizerId       String
+
+  // Status
+  status            MeetingStatus       @default(SCHEDULED)
+
+  // Notes & Documents
+  agenda            String?             @db.Text
+  minutes           String?             @db.Text
+  decisions         String?             @db.Text
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  // Relations
+  cabinet           Cabinet             @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  organizer         User                @relation(fields: [organizerId], references: [id])
+  participants      MeetingParticipant[]
+  careProtocols     CareProtocol[]
+
+  @@index([cabinetId])
+  @@index([meetingType])
+  @@index([scheduledDate])
+  @@map("msp_meetings")
+}
+
+enum MeetingType {
+  RCP              // Réunion de Concertation Pluridisciplinaire
+  STAFF_MEETING
+  CASE_REVIEW
+  TRAINING
+  QUALITY_REVIEW
+  OTHER
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// Meeting Participant
+model MeetingParticipant {
+  id                String        @id @default(uuid())
+  meetingId         String
+  userId            String
+
+  // Participation
+  role              String?       // Presenter, Participant, Observer
+  attendance        AttendanceStatus @default(PENDING)
+
+  // Relations
+  meeting           MSPMeeting    @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+  @@index([meetingId])
+  @@map("meeting_participants")
+}
+
+enum AttendanceStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  ATTENDED
+  ABSENT
+}
+
+// Care Protocol - Protocoles de Soins
+model CareProtocol {
+  id                String        @id @default(uuid())
+  cabinetId         String
+  patientId         String?       // Optional: peut être un protocole général
+  meetingId         String?       // Si créé lors d'une RCP
+
+  // Protocol Info
+  title             String
+  description       String        @db.Text
+  pathology         String?
+
+  // Content
+  objectives        String        @db.Text
+  steps             Json          // Array of protocol steps
+  medications       Json?
+  followUpSchedule  Json?
+
+  // Validation
+  validatedBy       String?
+  validatedAt       DateTime?
+
+  // Status
+  status            ProtocolStatus @default(ACTIVE)
+  startDate         DateTime
+  endDate           DateTime?
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  createdBy         String
+
+  // Relations
+  cabinet           Cabinet       @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+  patient           Patient?      @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  meeting           MSPMeeting?   @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  creator           User          @relation(fields: [createdBy], references: [id])
+
+  @@index([cabinetId])
+  @@index([patientId])
+  @@index([status])
+  @@map("care_protocols")
+}
+
+enum ProtocolStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  SUSPENDED
+  CANCELLED
+}
+
+// Advanced Agenda Settings - Paramètres Agenda Avancés
+model AdvancedAgendaSettings {
+  id                String        @id @default(uuid())
+  practitionerId    String        @unique
+  cabinetId         String
+
+  // Multiple Locations
+  allowMultipleLocations Boolean   @default(false)
+  locations         Json?         // Array of {name, address, slots[]}
+
+  // Parallel Consultations (Doublement)
+  allowParallelConsultations Boolean @default(false)
+  maxParallelSlots  Int           @default(1)
+
+  // Slot Types by Act
+  slotTypesByAct    Json?         // {CONSULTATION: 30, FIRST_VISIT: 60, etc.}
+
+  // Delay Notifications
+  enableDelayNotifications Boolean @default(false)
+  delayThresholdMinutes Int       @default(15)
+
+  // Statistics Preferences
+  trackOnlineBookingRate Boolean   @default(true)
+  trackNewPatientRate   Boolean    @default(true)
+  trackNoShowRate       Boolean    @default(true)
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // Relations
+  practitioner      Practitioner  @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+  cabinet           Cabinet       @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+
+  @@index([cabinetId])
+  @@map("advanced_agenda_settings")
 }
