@@ -16,6 +16,15 @@ import automatedReminderRoutes from './automatedReminder.routes';
 import paymentRoutes from './payment.routes';
 import messagingRoutes from './messaging.routes';
 import vaccinationRoutes from './vaccination.routes';
+import consultationRecordingRoutes from './consultationRecording.routes';
+import familyHistoryRoutes from './familyHistory.routes';
+import allergyDetailRoutes from './allergyDetail.routes';
+import professionalContactRoutes from './professionalContact.routes';
+import preventionCampaignRoutes from './preventionCampaign.routes';
+import mspMeetingRoutes from './mspMeeting.routes';
+import careProtocolRoutes from './careProtocol.routes';
+import advancedAgendaSettingsRoutes from './advancedAgendaSettings.routes';
+import patientMessagingNoAccountRoutes from './patientMessagingNoAccount.routes';
 
 const router = Router();
 
@@ -25,7 +34,7 @@ router.get('/health', (req, res) => {
     success: true,
     message: 'MediCare API is running',
     timestamp: new Date().toISOString(),
-    version: '2.0.0',
+    version: '4.0.0',
     features: [
       'Core Management',
       'Teleconsultation',
@@ -38,7 +47,16 @@ router.get('/health', (req, res) => {
       'Automated Reminders',
       'Online Payments',
       'Secure Messaging',
-      'Digital Vaccination Card'
+      'Digital Vaccination Card',
+      'AI Consultation Assistant (Doctolib Premium 79€/month - FREE HERE!)',
+      'Family History Module',
+      'Advanced Allergy Module',
+      'Professional Address Book',
+      'Prevention Campaigns',
+      'MSP/RCP Meetings',
+      'Care Protocols',
+      'Advanced Agenda Settings',
+      'Patient Messaging Without Account'
     ]
   });
 });
@@ -65,5 +83,16 @@ router.use('/reminders', automatedReminderRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/messages', messagingRoutes);
 router.use('/vaccinations', vaccinationRoutes);
+
+// Doctolib-Like Premium Features Routes (FREE!)
+router.use('/consultation-recordings', consultationRecordingRoutes);
+router.use('/family-history', familyHistoryRoutes);
+router.use('/allergy-details', allergyDetailRoutes);
+router.use('/professional-contacts', professionalContactRoutes);
+router.use('/prevention-campaigns', preventionCampaignRoutes);
+router.use('/msp-meetings', mspMeetingRoutes);
+router.use('/care-protocols', careProtocolRoutes);
+router.use('/advanced-agenda-settings', advancedAgendaSettingsRoutes);
+router.use('/patient-messaging-no-account', patientMessagingNoAccountRoutes);
 
 export default router;
