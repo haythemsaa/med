@@ -15,6 +15,7 @@ import PatientPortalPage from './pages/patient-portal/PatientPortalPage';
 import TeleconsultationRoomPage from './pages/teleconsultation/TeleconsultationRoomPage';
 import PublicBookingPage from './pages/public/PublicBookingPage';
 import AnalyticsPage from './pages/analytics/AnalyticsPage';
+import MessagingPage from './pages/messaging/MessagingPage';
 
 const theme = createTheme({
   palette: {
@@ -95,6 +96,14 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN_CABINET']}>
                 <AnalyticsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/messaging"
+            element={
+              <ProtectedRoute>
+                <MessagingPage />
               </ProtectedRoute>
             }
           />

@@ -10,6 +10,12 @@ import teleconsultationRoutes from './teleconsultation.routes';
 import questionnaireRoutes from './questionnaire.routes';
 import analyticsRoutes from './analytics.routes';
 import publicBookingRoutes from './publicBooking.routes';
+import prescriptionRoutes from './prescription.routes';
+import reviewRoutes from './review.routes';
+import automatedReminderRoutes from './automatedReminder.routes';
+import paymentRoutes from './payment.routes';
+import messagingRoutes from './messaging.routes';
+import vaccinationRoutes from './vaccination.routes';
 
 const router = Router();
 
@@ -26,7 +32,13 @@ router.get('/health', (req, res) => {
       'AI Analytics',
       'Public Booking',
       'Questionnaires',
-      'GDPR Compliance'
+      'GDPR Compliance',
+      'E-Prescription (France)',
+      'Patient Reviews',
+      'Automated Reminders',
+      'Online Payments',
+      'Secure Messaging',
+      'Digital Vaccination Card'
     ]
   });
 });
@@ -45,5 +57,13 @@ router.use('/teleconsultations', teleconsultationRoutes);
 router.use('/questionnaires', questionnaireRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/public-booking', publicBookingRoutes);
+
+// Competitive Features Routes (2025)
+router.use('/prescriptions', prescriptionRoutes);
+router.use('/reviews', reviewRoutes);
+router.use('/reminders', automatedReminderRoutes);
+router.use('/payments', paymentRoutes);
+router.use('/messages', messagingRoutes);
+router.use('/vaccinations', vaccinationRoutes);
 
 export default router;

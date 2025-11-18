@@ -145,6 +145,32 @@ enum PaymentMethod {
   OTHER
 }
 
+enum PrescriptionStatus {
+  DRAFT
+  ISSUED
+  DISPENSED
+  PARTIALLY_DISPENSED
+  CANCELLED
+  EXPIRED
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+  ARCHIVED
+}
+
+enum ReminderType {
+  APPOINTMENT_CONFIRMATION
+  APPOINTMENT_REMINDER_24H
+  APPOINTMENT_REMINDER_1H
+  FOLLOW_UP
+  MEDICATION_REMINDER
+  VACCINATION_DUE
+  CUSTOM
+}
+
 // ============================================
 // MODELS
 // ============================================
@@ -853,6 +879,311 @@ model PublicBookingPage {
 
   @@index([slug])
   @@map("public_booking_pages")
+}
+
+// Analytics Model - Track usage and metrics
+model Analytics {
+  id                String    @id @default(uuid())
+  cabinetId         String
+
+  // Metrics
+  metric            String    // appointments_created, no_shows, revenue, etc.
+  value             Decimal   @db.Decimal(15, 2)
+  count             Int       @default(1)
+
+  // Dimensions
+  date              DateTime
+  practitionerId    String?
+  metadata          Json?     // Additional context
+
+  createdAt         DateTime  @default(now())
+
+  @@index([cabinetId])
+  @@index([metric])
+  @@index([date])
+  @@map("analytics")
+}
+
+// E-Prescription Model - OBLIGATOIRE France 2025!
+model Prescription {
+  id                String              @id @default(uuid())
+  cabinetId         String
+  consultationId    String?
+  patientId         String
+  practitionerId    String
+
+  // Prescription Details
+  prescriptionNumber String            @unique
+  qrCode            String              @unique
+  status            PrescriptionStatus  @default(DRAFT)
+
+  // Medical Info
+  diagnosis         String?
+  notes             String?
+  validUntil        DateTime
+
+  // Dispensing
+  dispensedAt       DateTime?
+  dispensedBy       String?             // Pharmacy info
+
+  // Electronic Signature (CPS - Carte Professionnelle de Santé)
+  signedAt          DateTime?
+  signature         String?
+
+  // Integration with Mon Espace Santé / DMP
+  sentToDMP         Boolean             @default(false)
+  dmpReference      String?
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  // Relations
+  items             PrescriptionItem[]
+
+  @@index([cabinetId])
+  @@index([patientId])
+  @@index([practitionerId])
+  @@index([prescriptionNumber])
+  @@index([qrCode])
+  @@map("prescriptions")
+}
+
+// Prescription Item Model
+model PrescriptionItem {
+  id                String        @id @default(uuid())
+  prescriptionId    String
+
+  // Medication Details
+  medicationName    String
+  medicationCode    String?       // CIS code (France)
+  dosage            String
+  quantity          String
+  duration          String?
+  instructions      String
+
+  // Dispensing
+  dispensed         Boolean       @default(false)
+  dispensedQuantity String?
+  dispensedAt       DateTime?
+
+  // Substitution
+  substitutionAllowed Boolean     @default(true)
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // Relations
+  prescription      Prescription  @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([prescriptionId])
+  @@map("prescription_items")
+}
+
+// Review Model - Patient Reviews & Ratings
+model Review {
+  id                String    @id @default(uuid())
+  cabinetId         String
+  patientId         String
+  practitionerId    String?
+  appointmentId     String?   @unique
+
+  // Rating (1-5 stars)
+  overallRating     Int       // 1-5
+  waitTimeRating    Int?      // 1-5
+  staffRating       Int?      // 1-5
+  facilityRating    Int?      // 1-5
+
+  // Review Content
+  title             String?
+  comment           String?
+
+  // Moderation
+  isApproved        Boolean   @default(false)
+  isPublic          Boolean   @default(false)
+  moderatedAt       DateTime?
+  moderatedBy       String?
+
+  // Response
+  response          String?
+  respondedAt       DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([cabinetId])
+  @@index([patientId])
+  @@index([practitionerId])
+  @@index([overallRating])
+  @@index([isApproved])
+  @@map("reviews")
+}
+
+// Automated Reminder Model - Advanced Reminder System
+model AutomatedReminder {
+  id                String        @id @default(uuid())
+  cabinetId         String
+  appointmentId     String?
+  patientId         String
+
+  // Reminder Configuration
+  type              ReminderType
+  scheduledFor      DateTime
+  sentAt            DateTime?
+
+  // Delivery Method
+  sendSMS           Boolean       @default(true)
+  sendEmail         Boolean       @default(true)
+  sendPush          Boolean       @default(false)
+
+  // Content
+  subject           String?
+  message           String
+
+  // Status
+  status            NotificationStatus @default(PENDING)
+  attempts          Int           @default(0)
+  lastAttemptAt     DateTime?
+  errorMessage      String?
+
+  // Tracking
+  deliveredAt       DateTime?
+  readAt            DateTime?
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([cabinetId])
+  @@index([appointmentId])
+  @@index([patientId])
+  @@index([scheduledFor])
+  @@index([status])
+  @@map("automated_reminders")
+}
+
+// Payment Model - Online Payment Integration
+model Payment {
+  id                String        @id @default(uuid())
+  cabinetId         String
+  invoiceId         String?       @unique
+  patientId         String
+  appointmentId     String?
+
+  // Payment Details
+  amount            Decimal       @db.Decimal(10, 3)
+  currency          String        @default("TND")
+  method            PaymentMethod
+  status            PaymentStatus
+
+  // Stripe/PayPal Integration
+  stripePaymentId   String?       @unique
+  stripeChargeId    String?
+  paypalOrderId     String?
+
+  // Transaction Details
+  description       String?
+  receiptUrl        String?
+  receiptNumber     String?       @unique
+
+  // Refund
+  refundedAmount    Decimal?      @db.Decimal(10, 3)
+  refundedAt        DateTime?
+  refundReason      String?
+
+  // Metadata
+  metadata          Json?
+
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([cabinetId])
+  @@index([patientId])
+  @@index([status])
+  @@index([stripePaymentId])
+  @@map("payments")
+}
+
+// Message Model - Secure Messaging
+model Message {
+  id                String        @id @default(uuid())
+  cabinetId         String
+
+  // Participants
+  senderId          String
+  recipientId       String
+
+  // Message Content
+  subject           String?
+  content           String
+  attachments       Json?         // Array of file URLs
+
+  // Status
+  status            MessageStatus @default(SENT)
+  readAt            DateTime?
+
+  // Threading
+  threadId          String?
+  replyToId         String?
+
+  // Flags
+  isUrgent          Boolean       @default(false)
+  isArchived        Boolean       @default(false)
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([cabinetId])
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([threadId])
+  @@index([status])
+  @@map("messages")
+}
+
+// Vaccination Record Model - Digital Vaccination Card
+model VaccinationRecord {
+  id                String    @id @default(uuid())
+  cabinetId         String
+  patientId         String
+  practitionerId    String?
+
+  // Vaccine Details
+  vaccineName       String
+  vaccineCode       String?   // CIS code
+  diseaseName       String
+  manufacturer      String?
+  batchNumber       String?
+  expiryDate        DateTime?
+
+  // Administration
+  administeredAt    DateTime
+  administeredBy    String?
+  site              String?   // Injection site
+  route             String?   // IM, SC, etc.
+  dose              String?
+  doseNumber        Int?
+  totalDoses        Int?
+
+  // Next Dose
+  nextDoseDate      DateTime?
+  nextDoseReminder  Boolean   @default(true)
+
+  // Integration
+  sentToDMP         Boolean   @default(false)
+  dmpReference      String?
+
+  // Documentation
+  notes             String?
+  reactions         String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([cabinetId])
+  @@index([patientId])
+  @@index([administeredAt])
+  @@index([nextDoseDate])
+  @@map("vaccination_records")
 }
 
 // Analytics Model - Track usage and metrics
