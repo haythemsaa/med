@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: medicare-db
+    restart: always
+    environment:
+      POSTGRES_USER: medicare
+      POSTGRES_PASSWORD: medicare_dev_password
+      POSTGRES_DB: medicare_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/prisma/seed.sql:/docker-entrypoint-initdb.d/seed.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medicare"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medicare-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://medicare:medicare_dev_password@postgres:5432/medicare_db
+      JWT_SECRET: medicare_jwt_secret_change_in_production
+      JWT_REFRESH_SECRET: medicare_jwt_refresh_secret_change_in_production
+      PORT: 3000
+      CORS_ORIGIN: http://localhost:3001,http://localhost:19006
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed && npm run dev"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v4/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend Web
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: medicare-frontend
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      REACT_APP_API_URL: http://localhost:3000/api/v4
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm start
+
+  # Adminer (Database Management UI)
+  adminer:
+    image: adminer:latest
+    container_name: medicare-adminer
+    restart: always
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  default:
+    name: medicare-network
